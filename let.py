@@ -236,6 +236,67 @@ def env(x):
             return env(x.up())
 
 
+#### for current block
+
+def dcloBlock(x):
+    match constructor(x):
+        case Constructor.CRoot:
+            return dcloBlock(x.z_dollar(1))
+        case Constructor.CLet:
+            return dcloBlock(x.z_dollar(1))
+        case Constructor.CNestedLet:
+            return dcloBlock(x.z_dollar(3))
+        case Constructor.CAssign:
+            return dcloBlock(x.z_dollar(3))
+        case Constructor.CEmpty:
+            return dcliBlock(x)
+
+
+def dcliBlock(x):
+    match constructor(x):
+        case Constructor.CLet:
+            match constructor(x.up()):
+                case Constructor.CRoot:
+                    return []
+                case Constructor.CNestedLet:
+                    return []
+        case _:
+            match constructor(x.up()):
+                case Constructor.CLet:
+                    return dcliBlock(x.up())
+                case Constructor.CAssign:
+                    return [(lexeme_Name(x.up()), lexeme_Exp(x.up()))] + dcli(x.up())
+                case Constructor.CNestedLet:
+                    return [(lexeme_Name(x.up()), st.StrategicError)] + dcli(x.up())
+
+
+def env(x):
+    match constructor(x):
+        case Constructor.CRoot:
+            return dclo(x)
+        case Constructor.CLet:
+            return dclo(x)
+        case _:
+            return env(x.up())
+
+####
+
+#### Same but only for current block, simpler, assumes we're at start of let
+
+def dclBlock(x):
+    match constructor(x):
+        case Constructor.CLet:
+            return dclBlock(x.z_dollar(1))
+        case Constructor.CNestedLet:
+            return [(lexeme_Name(x), st.StrategicError)] + dclBlock(x.z_dollar(3))
+        case Constructor.CAssign:
+            return [(lexeme_Name(x), lexeme_Exp(x))] + dclBlock(x.z_dollar(3))
+        case Constructor.CEmpty:
+            return []
+
+####
+
+
 def lev(x):
     match constructor(x):
         case Constructor.CLet:
@@ -358,7 +419,7 @@ def main():
 
     #sys.setrecursionlimit(10000)
 
-    #i = int(sys.argv[1])
+    # i = int(sys.argv[1])
 
     p = Let.LET(List.ASSIGN("a", Exp.ADD(Exp.VAR("b"), Exp.CONST(0)),
             List.ASSIGN("c", Exp.CONST(2),
@@ -367,11 +428,12 @@ def main():
             List.EMPTY()))),
           Exp.SUB(Exp.ADD(Exp.VAR("a"), Exp.CONST(7)), Exp.VAR("c")))
 
-    #print(optRC(zp.obj(generator(i))))
+    # print(optRC(zp.obj(generator(i))))
 
     print(p)
     print("\n\n")
-    print(zp.obj(p).down().down().right().node())
+    #print(zp.obj(p).down().down().right().node())
+    print(optRC(zp.obj(Root.ROOT(p))))
 
 
 if __name__ == "__main__":
