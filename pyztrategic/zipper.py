@@ -1,5 +1,4 @@
 from collections import namedtuple
-from collections.abc import Iterable
 
 Path = namedtuple('Path', 'l, r, pnodes, ppath, changed')
 

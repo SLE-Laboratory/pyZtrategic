@@ -166,7 +166,7 @@ def adhocTU(f, g, z):
 def adhocTUZ(f, g, z):
     try:
         return g(z.node(), z)
-    except (StrategicError, AttributeError):
+    except (StrategicError, AttributeError, TypeError):
         return f(z)
 
 

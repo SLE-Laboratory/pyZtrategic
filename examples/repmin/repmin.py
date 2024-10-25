@@ -1,5 +1,5 @@
-import zipper as zp
-import strategy as st
+from pyztrategic import zipper as zp
+from pyztrategic import strategy as st
 from adt import adt, Case
 
 import sys

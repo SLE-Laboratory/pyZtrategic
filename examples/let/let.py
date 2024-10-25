@@ -1,5 +1,5 @@
-import zipper as zp
-import strategy as st
+from pyztrategic import zipper as zp
+from pyztrategic import strategy as st
 from adt import adt, Case
 
 import sys
@@ -270,21 +270,14 @@ def dcliBlock(x):
                     return [(lexeme_Name(x.up()), st.StrategicError)] + dcli(x.up())
 
 
-def env(x):
-    match constructor(x):
-        case Constructor.CRoot:
-            return dclo(x)
-        case Constructor.CLet:
-            return dclo(x)
-        case _:
-            return env(x.up())
-
 ####
 
 #### Same but only for current block, simpler, assumes we're at start of let
 
 def dclBlock(x):
     match constructor(x):
+        case Constructor.CRoot:
+            return dclBlock(x.z_dollar(1))
         case Constructor.CLet:
             return dclBlock(x.z_dollar(1))
         case Constructor.CNestedLet:
@@ -337,6 +330,8 @@ def errs(x):
             return errs(x.z_dollar(1)) + errs(x.z_dollar(2))
         case Constructor.CSub:
             return errs(x.z_dollar(1)) + errs(x.z_dollar(2))
+        case Constructor.CNeg:
+            return errs(x.z_dollar(1))
         case Constructor.CEmpty:
             return []
         case Constructor.CConst:
@@ -348,13 +343,16 @@ def errs(x):
         case Constructor.CNestedLet:
             return mNBIn((lexeme_Name(x), lev(x)), dcli(x)) + errs(x.z_dollar(2)) + errs(x.z_dollar(3))
 
-
 def expand(t, e):
     results = sorted(filter(lambda x: x[0] == t[0] and x[1] <= t[1], e), key=lambda x: x[1], reverse=True)
     if results:
         return results[0][2]
     else:
         raise st.StrategicError
+
+
+def semantics(p):
+    return errs(zp.obj(p))
 
 #########################################
 # generator

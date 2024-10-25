@@ -1,18 +1,9 @@
 from hypothesis import given
 from hypothesis.strategies import integers, composite, one_of
 
-from strategy import *
+from pyztrategic import strategy as st
+from pyztrategic import zipper as zp
 from repmin import Tree, locmin, globmin, repminAG
-from zipper import obj
-
-
-# generateTree :: Gen Tree
-# generateTree = fmap Root (generateTree' 80 20) 
-#  where generateTree' f l = frequency 
-#                          [(f, Fork 
-#                                 <$> generateTree' (div f 2) (l*2) 
-#                                 <*> generateTree' (div f 2) (l*2)),
-#                           (l, Leaf <$> arbitrary)]
 
 
 @composite
@@ -40,7 +31,7 @@ def genTreeRoot(draw):
 
 @given(genTreeRoot())
 def testPropLocMin(i):
-    assert all(full_tdTU(lambda x: adhocTUZ(failTU, validateLocMin, x), obj(i)))
+    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, validateLocMin, x), zp.obj(i)))
 
 
 
@@ -55,7 +46,7 @@ def validateLocMin(t, z):
 
 @given(genTreeRoot())
 def testPropGlobMin(i):
-    assert all(full_tdTU(lambda x: adhocTUZ(failTU, globminIsSmaller, x), obj(i)))
+    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, globminIsSmaller, x), zp.obj(i)))
 
 
 def globminIsSmaller(t, z):
@@ -69,13 +60,13 @@ def globminIsSmaller(t, z):
 
 @given(genTreeRoot())
 def testResultingInOriginal(t):
-    assert all(full_tdTU(lambda x: adhocTUZ(failTU, intInOriginal, x), repminAG(t)))
+    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, intInOriginal, x), repminAG(t)))
 
 
 def intInOriginal(i):
     def equal(n):
         return i == n
-    return any(full_tdTU(lambda x: adhocTUZ(failTU, equal, x), obj(i)))
+    return any(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, equal, x), zp.obj(i)))
 
 
 @given(genTreeRoot())
@@ -116,5 +107,5 @@ def isIsomorphic(t1, t2):
 
 @given(genTreeRoot())
 def testGlobminPreserved(t):
-    zt = obj(t)
-    assert globmin(zt) == globmin(obj(repminAG(t)))
+    zt = zp.obj(t)
+    assert globmin(zt) == globmin(zp.obj(repminAG(t)))

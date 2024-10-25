@@ -1,1 +1,0 @@
-algebraic-data-types==0.2.1
