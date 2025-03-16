@@ -1,14 +1,19 @@
 from collections import namedtuple
 
-Path = namedtuple('Path', 'l, r, pnodes, ppath, changed')
+from typing import Any, Callable, Dict, Tuple, Optional, Iterable
 
 
-def isa(type):
+type Zipper[T] = 'Zipper[T]'
+
+PathType = namedtuple('PathType', 'l, r, pnodes, ppath, changed')
+
+
+def isa(type: type) -> Callable[[Any], bool]:
     """
     Returns is_<type>(obj) a function that returns true
     when it's argument is the istance of type
     """
-    def f(obj):
+    def f(obj: Any) -> bool:
         return isinstance(obj, type)
 
     f.__name__ = "is_{0}".format(type)
@@ -17,46 +22,44 @@ def isa(type):
 # ---------------------------------------------------------------------------
 
 
-def noPrimitive(obj):
+def noPrimitive(obj: Any) -> bool:
     return not isinstance(obj, (int, float, bool, str))
 
 
-def tupDict(root):
+def tupDict[T](root: Dict[Any, T]) -> Tuple[T, ...]:
     return tuple(root.values())
 
 
-def tup(root):
+def tup(root: Any) -> Tuple[Any, ...]:
     if is_list(root):
         return tuple(root)
     elif is_dict(root):
         return tupDict(root)
     else:
         t = root.__dict__
-        if tuple(t.keys())[0] == '_key':
-            tv = tuple(t.values())
-            if not isinstance(tv[1], tuple):
-                tp = tuple([tv[1]])
-            else:
-                tp = tv[1]
-        else:
-            tp = tuple(t.values())
+        # if tuple(t.keys())[0] == '_key':
+        #     tv = tuple(t.values())
+        #     if not isinstance(tv[1], tuple):
+        #         tp = tuple([tv[1]])
+        #     else:
+        #         tp = tv[1]
+        # else:
+        tp = tuple(t.values())
 
         return tp
 
 
-def mkNode(node, children):
-    try:
-        return type(node)(node._key, children)
-    except AttributeError:
-        if is_dict(node):
-            return native_dict(zip(tuple(node.keys()), children))
-        elif is_list(node):
-            return native_list(children)
-        else:
-            return type(node)(*children)
+def mkNode[T](node: T, children: Tuple[T, ...]) -> T:
+    if is_dict(node):
+        #return native_dict(zip(tuple(node.keys()), children))
+        return native_dict(children)
+    elif is_list(node):
+        return native_list(children)
+    else:
+        return type(node)(*children)
 
 
-def obj(root):
+def obj[T](root: T) -> Zipper[T]:
     return zipper(
         root,
         noPrimitive,
@@ -71,7 +74,7 @@ native_list = __builtins__['list']
 is_list = isa(native_list)
 
 
-def list(root):
+def list[T](root: T) -> Zipper[T]:
     return zipper(
         root,
         is_list,
@@ -84,7 +87,7 @@ native_dict = __builtins__['dict']
 is_dict = isa(native_dict)
 
 
-def dict(root):
+def dict[T](root: T) -> Zipper[T]:
     return zipper(
         root,
         # i is either the root object or a tuple of key value pairs
@@ -92,41 +95,55 @@ def dict(root):
         is_dict,
         # lambda i: tuple(i.items() if i is is_dict(i) else i[1].items()),
         tupDict,
-        lambda node, children: native_dict(zip(tuple(node.keys()), children))
+        #lambda node, children: native_dict(zip(tuple(node.keys()), children))
+        lambda node, children: native_dict(children)
     )
 
 
-def zipper(root, is_branch, children, make_node):
-    return Loc(root, None, is_branch, children, make_node)
+def zipper[T](
+    root: T,
+    is_branch: Callable[[T], bool],
+    children: Callable[[T], Tuple[T, ...]],
+    make_node: Callable[[T, Tuple[T, ...]], T]
+) -> Zipper[T]:
+    return Zipper(root, None, is_branch, children, make_node)
 
 
-class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')):
+class Zipper[T](namedtuple('Zipper', 'current, path, is_branch, get_children, make_node')):
+    current: T
+    path: Optional[PathType]
+    is_branch: Callable[[T], bool]
+    get_children: Callable[[T], Tuple[T, ...]]
+    make_node: Callable[[T, Tuple[T, ...]], T]
 
-    def __repr__(self):
-        return "<zipper.Loc({}) object at {}>".format(self.current, id(self))
+
+    def __repr__(self) -> str:
+        return "<zipper.Zipper({}) object at {}>".format(self.current, id(self))
 
     # Context
-    def node(self):
+    def node(self) -> T:
         return self.current
 
-    def children(self):
+    def children(self) -> Optional[Tuple[T, ...]]:
         if self.branch():
             return self.get_children(self.current)
+        else:
+            return None
 
-    def branch(self):
+    def branch(self) -> bool:
         return self.is_branch(self.current)
 
-    def root(self):
+    def root(self) -> T:
         return self.top().current
 
-    def at_end(self):
+    def at_end(self) -> bool:
         return not bool(self.path)
 
     # Navigation
-    def down(self):
+    def down(self) -> Optional[Zipper[T]]:
         children = self.children()
         if children:
-            path = Path(
+            path = PathType(
                 l=(),
                 r=children[1:],
                 pnodes=self.path.pnodes + (self.current,) if self.path else (self.current,),
@@ -136,15 +153,19 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
 
             return self._replace(current=children[0], path=path)
 
-    def up(self):
+        else:
+            return None
+
+
+    def up(self) -> Optional[Zipper[T]]:
         if self.path:
             l, r, pnodes, ppath, changed = self.path
             if pnodes:
                 pnode = pnodes[-1]
                 if changed:
                     chld = l+(self.current,) + r
-                    if len(chld) == 1:
-                        chld = chld[0]
+                    # if len(chld) == 1:
+                    #     chld = chld[0]
                     # if not isinstance(chld, Iterable):
                         # chld = (chld,)
                     return self._replace(
@@ -153,22 +174,24 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
                     )
                 else:
                     return self._replace(current=pnode, path=ppath)
+        else:
+            return None
 
-    def top(self):
-        loc = self
-        while loc.path:
-            loc = loc.up()
-        return loc
+    def top(self) -> Zipper[T]:
+        Zipper = self
+        while Zipper.path:
+            Zipper = Zipper.up()
+        return Zipper
 
-    def ancestor(self, filter):
+    def ancestor(self, filter: Callable[[Zipper[T]], bool]) -> Optional[Zipper[T]]:
         """
-        Return the first ancestor preceding the current loc that
+        Return the first ancestor preceding the current Zipper that
         matches the filter(ancestor) function.
 
-        The filter function is invoked with the location of the
+        The filter function is invoked with the Zipperation of the
         next ancestor. If the filter function returns true then
         the ancestor will be returned to the invoker of
-        loc.ancestor(filter) method. Otherwise the search will move
+        Zipper.ancestor(filter) method. Otherwise the search will move
         to the next ancestor until the top of the tree is reached.
         """
 
@@ -178,8 +201,9 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
                 return u
             else:
                 u = u.up()
+        return None
 
-    def left(self):
+    def left(self) -> Optional[Zipper[T]]:
         if self.path and self.path.l:
             ls, r = self.path[:2]
             l, current = ls[:-1], ls[-1]
@@ -187,9 +211,11 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
                 l=l,
                 r=(self.current,) + r
             ))
+        else:
+            return None
 
-    def leftmost(self):
-        """Returns the left most sibling at this location or self"""
+    def leftmost(self) -> Zipper[T]:
+        """Returns the left most sibling at this Zipperation or self"""
 
         path = self.path
         if path:
@@ -204,8 +230,8 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         else:
             return self
 
-    def rightmost(self):
-        """Returns the right most sibling at this location or self"""
+    def rightmost(self) ->  Zipper[T]:
+        """Returns the right most sibling at this Zipperation or self"""
 
         path = self.path
         if path:
@@ -220,7 +246,7 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         else:
             return self
 
-    def right(self):
+    def right(self) -> Optional[Zipper[T]]:
         if self.path and self.path.r:
             l, rs = self.path[:2]
             current, rnext = rs[0], rs[1:]
@@ -228,33 +254,35 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
                 l=l+(self.current,),
                 r=rnext
             ))
+        else:
+            return None
 
-    def leftmost_descendant(self):
-        loc = self
-        while loc.branch():
-            d = loc.down()
+    def leftmost_descendant(self) -> Zipper[T]:
+        Zipper = self
+        while Zipper.branch():
+            d = Zipper.down()
             if d:
-                loc = d
+                Zipper = d
             else:
                 break
 
-        return loc
+        return Zipper
 
-    def rightmost_descendant(self):
-        loc = self
-        while loc.branch():
-            d = loc.down()
+    def rightmost_descendant(self) -> Zipper[T]:
+        Zipper = self
+        while Zipper.branch():
+            d = Zipper.down()
             if d:
-                loc = d.rightmost()
+                Zipper = d.rightmost()
             else:
                 break
-        return loc
+        return Zipper
 
-    def move_to(self, dest):
+    def move_to(self, dest: Zipper[T]) -> Zipper[T]:
         """
-        Move to the same 'position' in the tree as the given loc and return
-        the loc that currently resides there. This method does not gurantee
-        that the node from the previous loc will be the same node if the node
+        Move to the same 'position' in the tree as the given Zipper and return
+        the Zipper that currently resides there. This method does not gurantee
+        that the node from the previous Zipper will be the same node if the node
         or it's ancestory has bee modified.
         """
 
@@ -268,24 +296,24 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
 
         moves.reverse()
 
-        loc = self.top()
+        Zipper = self.top()
         for m in moves:
             if m == 'd':
-                loc = loc.down()
+                Zipper = Zipper.down()
             else:
-                loc = loc.right()
+                Zipper = Zipper.right()
 
-        return loc
+        return Zipper
 
     # Enumeration
-    def preorder_iter(self):
-        loc = self
-        while loc:
-            loc = loc.preorder_next()
-            if loc:
-                yield loc
+    def preorder_iter(self) -> Iterable[Zipper[T]]:
+        Zipper = self
+        while Zipper:
+            Zipper = Zipper.preorder_next()
+            if Zipper:
+                yield Zipper
 
-    def preorder_next(self):
+    def preorder_next(self) -> Optional[Zipper[T]]:
         """
         Visit's nodes in depth-first pre-order.
 
@@ -322,7 +350,7 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
                     else:
                         return u._replace(path=())
 
-    def postorder_next(self):
+    def postorder_next(self) -> Optional[Zipper[T]]:
         """
         Visit's nodes in depth-first post-order.
 
@@ -350,37 +378,37 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         else:
             return self.up()
 
-    def postorder_iter(self):
-        loc = self.leftmost_descendant()
+    def postorder_iter(self) -> Iterable[Zipper[T]]:
+        Zipper = self.leftmost_descendant()
 
-        while loc:
-            yield loc
-            loc = loc.postorder_next()
+        while Zipper:
+            yield Zipper
+            Zipper = Zipper.postorder_next()
 
     # editing
-    def append(self, item):
+    def append(self, item: T) -> Zipper[T]:
         """
-        Inserts the item as the rightmost child of the node at this loc,
+        Inserts the item as the rightmost child of the node at this Zipper,
         without moving.
         """
         return self.replace(
             self.make_node(self.node(),  self.children()+(item,))
         )
 
-    def edit(self, f, *args):
-        "Replace the node at this loc with the value of f(node, *args)"
+    def edit(self, f: Callable[[T, Any], T], *args: Any) -> Zipper[T]:
+        "Replace the node at this Zipper with the value of f(node, *args)"
         return self.replace(f(self.current, *args))
 
-    def insert(self, item):
+    def insert(self, item: T) -> Zipper[T]:
         """
-        Inserts the item as the leftmost child of the node at this loc,
+        Inserts the item as the leftmost child of the node at this Zipper,
         without moving.
         """
         return self.replace(
             self.make_node(self.node(), (item,) + self.children())
         )
 
-    def insert_left(self, item):
+    def insert_left(self, item: T) -> Zipper[T]:
         """Insert item as left sibling of node without moving"""
         path = self.path
         if not path:
@@ -389,7 +417,7 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         new = path._replace(l=path.l + (item,), changed=True)
         return self._replace(path=new)
 
-    def insert_right(self, item):
+    def insert_right(self, item: T) -> Zipper[T]:
         """Insert item as right sibling of node without moving"""
         path = self.path
         if not path:
@@ -398,25 +426,25 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         new = path._replace(r=(item,) + path.r, changed=True)
         return self._replace(path=new)
 
-    def replace(self, value):
+    def replace(self, value: T) -> Zipper[T]:
         if self.path:
             return self._replace(current=value, path=self.path._replace(changed=True))
         else:
             return self._replace(current=value)
 
-    def find(self, func):
-        loc = self.leftmost_descendant()
+    def find(self, func: Callable[[Zipper[T]], bool]) -> Optional[Zipper[T]]:
+        Zipper = self.leftmost_descendant()
         while True:
-            if func(loc):
-                return loc
-            elif loc.at_end():
+            if func(Zipper):
+                return Zipper
+            elif Zipper.at_end():
                 return None
             else:
-                loc = loc.postorder_next()
+                Zipper = Zipper.postorder_next()
 
-    def remove(self):
+    def remove(self) -> Zipper[T]:
         """
-        Removes the node at the current location, returning the
+        Removes the node at the current Zipperation, returning the
         node that would have proceeded it in a depth-first walk.
 
         For eaxmple given the following tree:
@@ -453,21 +481,24 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
 
 # ---------------------------------------------------------------------------
 
-    def trans(self, func):
+    def trans(self, func: Callable[[T], T]) -> Zipper[T]:
         return self.replace(func(self.node()))
 
-    def transZ(self, func):
+    def transZ(self, func: Callable[[T, Zipper[T]], T]) -> Zipper[T]:
         return self.replace(func(self.node(), self))
 
 # ---------------------------------------------------------------------------
 
-    def z_dollar(self, n):
-        if n == 1:
-            return self.down()
-        else:
-            return self.z_dollar(n-1).right()
+    def z_dollar(self, n: int) -> Optional[Zipper[T]]:
+        current = self.down()
+        for _ in range(n - 1):
+            right_result = current.right()
+            if right_result is None:
+                return None
+            current = right_result
+        return current
 
-    def z_pipe(self, n):
+    def z_pipe(self, n: int) -> bool:
         left_z = self.left()
         if n == 1:
             return left_z is not None
@@ -476,18 +507,26 @@ class Loc(namedtuple('Loc', 'current, path, is_branch, get_children, make_node')
         else:
             return left_z.z_pipe(n-1)
 
-    def z_dollar_r(self, n):
+    def z_dollar_r(self, n: int) -> Optional[Zipper[T]]:
         current = self.arity()
-        return self.up().z_dollar(current + n)
+        up_result = self.up()
+        if up_result:
+            return up_result.z_dollar(current + n)
+        else:
+            return None
 
-    def z_dollar_l(self, n):
+    def z_dollar_l(self, n: int) -> Optional[Zipper[T]]:
         current = self.arity()
-        return self.up().z_dollar(current - n)
+        up_result = self.up()
+        if up_result:
+            return up_result.z_dollar(current - n)
+        else:
+            return None
 
-    def arity(self):
+    def arity(self) -> int:
         return self._arity(1)
 
-    def _arity(self, n):
+    def _arity(self, n: int) -> int:
         left_m = self.left()
         if left_m is None:
             return n
