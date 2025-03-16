@@ -1,200 +1,57 @@
-from pyztrategic import zipper as zp
+from pyztrategic.zipper import Zipper, obj
 from pyztrategic import strategy as st
-from adt import adt, Case
 
 import sys
 
+from typing import Optional
 
-@adt
-class Root:
-    ROOT: Case["Let"]
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.match(
-            root=lambda l: str(l)
-        )
+from let_data import *
 
 
-@adt
-class Let:
-    LET: Case["List", "Exp"]
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.match(
-            let=lambda l, e: "let " + str(l) + "in " + str(e) + "\n"
-        )
-
-
-@adt
-class List:
-    NESTEDLET: Case[str, "Let", "List"]
-    ASSIGN: Case[str, "Exp", "List"]
-    EMPTY: Case
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.match(
-            nestedlet=lambda s, l, r: s + " = " + str(l) + str(r),
-            assign=lambda s, e, l: s + " = " + str(e) + "\n" + str(l),
-            empty=lambda: ""
-        )
+def optAdd(x: Exp, y: Exp) -> Exp:
+    match(x, y):
+        case Const(0), _:
+            return y
+        case _, Const(0):
+            return x
+        case Const(xx), Const(yy):
+            return Const(xx + yy)
+        case _:
+            raise st.StrategicError
 
 
-@adt
-class Exp:
-    ADD: Case["Exp", "Exp"]
-    SUB: Case["Exp", "Exp"]
-    NEG: Case["Exp"]
-    VAR: Case[str]
-    CONST: Case[int]
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.match(
-            add=lambda x, y: str(x) + " + " + str(y),
-            sub=lambda x, y: str(x) + " - " + str(y),
-            neg=lambda x: "-" + str(x),
-            var=lambda x: x,
-            const=lambda x: str(x),
-        )
+def optNeg(x: Exp) -> Exp:
+    match x:
+        case Neg(y):
+            return y
+        case Const(i):
+            return Const(-i)
+        case _:
+            raise st.StrategicError
 
 
-class Constructor:
-    CRoot = "CRoot"
-    CLet = "CLet"
-    CNestedLet = "CNestedLet"
-    CAssign = "CAssign"
-    CEmpty = "CEmpty"
-    CAdd = "CAdd"
-    CSub = "CSub"
-    CNeg = "CNeg"
-    CConst = "CConst"
-    CVar = "CVar"
+def expr(exp: Exp) -> Exp:
+    match exp:
+        case Add(x, y):
+            return optAdd(x, y)
+        case Sub(x, y):
+            return Add(x, Neg(y))
+        case Neg(x):
+            return optNeg(x)
+        case _:
+            raise st.StrategicError
 
 
-def optAdd(x, y):
-    if (x == Exp.CONST(0)):
-        return y
-    elif (y == Exp.CONST(0)):
-        return x
-    elif (lambda a, b: x == Exp.CONST() and y == Exp.CONST()):
-        return Exp.CONST(x.const() + y.const())
-    else:
-        return st.StrategicError
+def expC(exp: Exp, z: Zipper[Lets]) -> Exp:
+    match exp:
+        case Var(x):
+            return expand((x, lev(z)), env(z))
+        case _:
+            raise st.StrategicError
 
 
-def optNeg(x):
-    if (lambda a: x == Exp.NEG()):
-        return x.neg()
-    elif (lambda b: x == Exp.CONST()):
-        return Exp.CONST(-x.const())
-    else:
-        return st.StrategicError
 
-
-def expr(exp):
-    x = exp.match(
-        add=lambda x, y: optAdd(x, y),
-        sub=lambda x, y: Exp.ADD(x, Exp.NEG(y)),
-        neg=lambda x: optNeg(x),
-        var=lambda x: st.StrategicError,
-        const=lambda x: st.StrategicError
-    )
-    if x is st.StrategicError:
-        raise x
-    else:
-        return x
-
-
-def expC(exp, z):
-    x = exp.match(
-        add=lambda x, y: st.StrategicError,
-        sub=lambda x, y: st.StrategicError,
-        neg=lambda x: st.StrategicError,
-        var=lambda x: expand((x, lev(z)), env(z)),
-        const=lambda x: st.StrategicError
-    )
-    if x is st.StrategicError:
-        raise x
-    else:
-        return x
-
-
-def test(exp):
-    x = exp.match(
-        add=lambda x, y: [x],
-        sub=lambda x, y: st.StrategicError(),
-        neg=lambda x: st.StrategicError(),
-        var=lambda x: st.StrategicError(),
-        const=lambda x: st.StrategicError()
-    )
-    if x is st.StrategicError:
-        raise x
-    else:
-        return x
-
-
-def constructor(ag):
-    if isinstance(ag.node(), Root):
-        return ag.node().match(
-            root=lambda x: Constructor.CRoot
-        )
-    elif isinstance(ag.node(), Let):
-        return ag.node().match(
-            let=lambda x, y: Constructor.CLet
-        )
-    elif isinstance(ag.node(), List):
-        return ag.node().match(
-            nestedlet=lambda x, y, z: Constructor.CNestedLet,
-            assign=lambda x, y, z: Constructor.CAssign,
-            empty=lambda: Constructor.CEmpty
-        )
-    else:
-        return ag.node().match(
-            add=lambda x, y: Constructor.CAdd,
-            sub=lambda x, y: Constructor.CSub,
-            neg=lambda x: Constructor.CNeg,
-            var=lambda x: Constructor.CVar,
-            const=lambda x: Constructor.CConst
-        )
-
-
-def lexeme_Name(ag):
-    if isinstance(ag.node(), List):
-        return ag.node().match(
-            nestedlet=lambda x, y, z: x,
-            assign=lambda x, y, z: x,
-            empty=lambda: None
-        )
-    else:
-        return ag.node().match(
-            var=lambda x: x,
-            add=lambda x, y: None,
-            sub=lambda x, y: None,
-            neg=lambda x: None,
-            const=lambda x: None
-        )
-
-
-def lexeme_Exp(ag):
-    return ag.node().match(
-        assign=lambda x, y, z: y,
-        nestedlet=lambda x, y, z: None,
-        empty=lambda: None
-    )
-
-
-def dclo(x):
+def dclo(x: Zipper[Lets]) -> Env:
     match constructor(x):
         case Constructor.CRoot:
             return dclo(x.z_dollar(1))
@@ -208,7 +65,7 @@ def dclo(x):
             return dcli(x)
 
 
-def dcli(x):
+def dcli(x: Zipper[Lets]) -> Env:
     match constructor(x):
         case Constructor.CLet:
             match constructor(x.up()):
@@ -223,10 +80,10 @@ def dcli(x):
                 case Constructor.CAssign:
                     return [(lexeme_Name(x.up()), lev(x.up()), lexeme_Exp(x.up()))] + dcli(x.up())
                 case Constructor.CNestedLet:
-                    return [(lexeme_Name(x.up()), lev(x.up()), st.StrategicError)] + dcli(x.up())
+                    return [(lexeme_Name(x.up()), lev(x.up()), None)] + dcli(x.up())
 
 
-def env(x):
+def env(x: Zipper[Lets]) -> Env:
     match constructor(x):
         case Constructor.CRoot:
             return dclo(x)
@@ -238,7 +95,7 @@ def env(x):
 
 #### for current block
 
-def dcloBlock(x):
+def dcloBlock(x: Zipper[Lets]) -> EnvBlock:
     match constructor(x):
         case Constructor.CRoot:
             return dcloBlock(x.z_dollar(1))
@@ -252,7 +109,7 @@ def dcloBlock(x):
             return dcliBlock(x)
 
 
-def dcliBlock(x):
+def dcliBlock(x: Zipper[Lets]) -> EnvBlock:
     match constructor(x):
         case Constructor.CLet:
             match constructor(x.up()):
@@ -265,23 +122,32 @@ def dcliBlock(x):
                 case Constructor.CLet:
                     return dcliBlock(x.up())
                 case Constructor.CAssign:
-                    return [(lexeme_Name(x.up()), lexeme_Exp(x.up()))] + dcli(x.up())
+                    return [(lexeme_Name(x.up()), lexeme_Exp(x.up()))] + dcliBlock(x.up())
                 case Constructor.CNestedLet:
-                    return [(lexeme_Name(x.up()), st.StrategicError)] + dcli(x.up())
+                    return [(lexeme_Name(x.up()), None)] + dcliBlock(x.up())
 
+
+def envBlock(x: Zipper[Lets]) -> EnvBlock:
+    match constructor(x):
+        case Constructor.CRoot:
+            return dcloBlock(x)
+        case Constructor.CLet:
+            return dcloBlock(x)
+        case _:
+            return envBlock(x.up())
 
 ####
 
 #### Same but only for current block, simpler, assumes we're at start of let
 
-def dclBlock(x):
+def dclBlock(x: Zipper[Lets]) -> EnvBlock:
     match constructor(x):
         case Constructor.CRoot:
             return dclBlock(x.z_dollar(1))
         case Constructor.CLet:
             return dclBlock(x.z_dollar(1))
         case Constructor.CNestedLet:
-            return [(lexeme_Name(x), st.StrategicError)] + dclBlock(x.z_dollar(3))
+            return [(lexeme_Name(x), None)] + dclBlock(x.z_dollar(3))
         case Constructor.CAssign:
             return [(lexeme_Name(x), lexeme_Exp(x))] + dclBlock(x.z_dollar(3))
         case Constructor.CEmpty:
@@ -290,7 +156,7 @@ def dclBlock(x):
 ####
 
 
-def lev(x):
+def lev(x: Zipper[Lets]) -> int:
     match constructor(x):
         case Constructor.CLet:
             match constructor(x.up()):
@@ -302,7 +168,7 @@ def lev(x):
             return lev(x.up())
 
 
-def mBIn(name, env):
+def mBIn(name: str, env: Env) -> list[str]:
     if not env:
         return [name]
     elif env[0][0] == name:
@@ -311,7 +177,7 @@ def mBIn(name, env):
         return mBIn(name, env[1:])
 
 
-def mNBIn(t, env):
+def mNBIn(t: tuple[str, int], env: Env) -> list[str]:
     if not env:
         return []
     elif t[0] == env[0][0] and t[1] == env[0][1]:
@@ -320,7 +186,7 @@ def mNBIn(t, env):
         return mNBIn(t, env[1:])
 
 
-def errs(x):
+def errs(x: Zipper[Lets]) -> list[str]:
     match constructor(x):
         case Constructor.CRoot:
             return errs(x.z_dollar(1))
@@ -343,67 +209,25 @@ def errs(x):
         case Constructor.CNestedLet:
             return mNBIn((lexeme_Name(x), lev(x)), dcli(x)) + errs(x.z_dollar(2)) + errs(x.z_dollar(3))
 
-def expand(t, e):
+def expand(t: tuple[str, int], e: Env) -> Exp:
     results = sorted(filter(lambda x: x[0] == t[0] and x[1] <= t[1], e), key=lambda x: x[1], reverse=True)
     if results:
-        return results[0][2]
+        res = results[0][2]
+        if res:
+            return res
+        else:
+            raise st.StrategicError
     else:
         raise st.StrategicError
 
 
-def semantics(p):
-    return errs(zp.obj(p))
+def semantics(p: Lets) -> list[str]:
+    return errs(obj(p))
 
-#########################################
-# generator
-
-
-def generator(n):
-    return Root.ROOT(Let.LET(genLetTree(n), Exp.VAR("n_" + str(n))))
-
-
-def genLetTree(n):
-    return addList(genNestedLets(n))
-
-
-def addList(t):
-    return t.match(
-        nestedlet=lambda s, l, ll: List.NESTEDLET(s, l, addList(ll)),
-        empty=lambda: List.ASSIGN("va", Exp.CONST(10), List.ASSIGN("vb", Exp.CONST(20), List.EMPTY())),
-        assign=lambda s, a, ll: List.ASSIGN(s, a, addList(ll))
-    )
-
-
-def genNestedLets(n):
-    if n == 0:
-        return List.EMPTY()
-    elif n == 1:
-        return List.NESTEDLET("n_1", Let.LET(oneList(n), Exp.ADD(Exp.VAR("z_10"), Exp.VAR("z_9"))), genListAssign(n*10))
-    elif n > 1:
-        return List.NESTEDLET("n_" + str(n), Let.LET(oneList(n), Exp.ADD(Exp.VAR("n_" + str(n-1)), Exp.VAR("z_" + str(n*10-1)))), genListAssign(n*10))
-
-
-def oneList(n):
-    return List.ASSIGN("zz_" + str(n), Exp.CONST(10), List.ASSIGN("zz_" + str(n-1), Exp.VAR("va"), genNestedLets(n-1)))
-
-
-def genListAssign(n):
-    if n == 0:
-        return List.ASSIGN("z_0", Exp.CONST(10), List.EMPTY())
-    elif n % 9 == 0:
-        return List.ASSIGN("z_" + str(n), Exp.VAR("va"), genListAssign(n-1))
-    else:
-        return List.ASSIGN("z_" + str(n), Exp.ADD(Exp.VAR("z_" + str(n-1)), Exp.CONST(1)), genListAssign(n-1))
-
-
-##########################################
-
-
-def optR(z):
+def optR(z: Zipper[Lets]) -> Lets:
     return st.innermost(lambda x: st.adhocTP(st.failTP, expr, x), z).node()
 
-
-def optRC(z):
+def optRC(z: Zipper[Lets]) -> Lets:
     def exp1(y):
         return st.adhocTPZ(st.failTP, expC, y)
 
@@ -413,25 +237,73 @@ def optRC(z):
     return st.innermost(exp2, z).node()
 
 
+######################################################
+
+
+
+def dead(t: Zipper[Lets]) -> bool:
+    match constructor(t):
+        case Constructor.CAssign:
+            return deadsFromBlock(lexeme_Name(t), t)
+        case Constructor.CNestedLet:
+            return deadsFromBlock(lexeme_Name(t), t)
+        case _:
+            raise st.StrategicError
+
+def deadsFromBlock(s: str, t: Zipper[Lets]) -> bool:
+    match constructor(t):
+        case Constructor.CLet:
+            return deads(s, t.z_dollar(1)) and deads(s, t.z_dollar(2))
+        case Constructor.CRoot:
+            return deads(s, t.z_dollar(1))
+        case _:
+            return deadsFromBlock(s, t.up())
+
+def deads(s: str, t: Zipper[Lets]) -> bool:
+    match constructor(t):
+        case Constructor.CEmpty:
+            return True
+        case Constructor.CAssign:
+            return deads(s, t.z_dollar(2)) and deads(s, t.z_dollar(3))
+        case Constructor.CVar:
+            return s != lexeme_Name(t)
+        case Constructor.CLet:
+            return any([name for (name, _) in envBlock(t) if name == s]) or deadsFromBlock(s, t)
+        case Constructor.CRoot:
+            return any([name for (name, _) in envBlock(t) if name == s]) or deadsFromBlock(s, t)
+        case Constructor.CNestedLet:
+            return deads(s, t.z_dollar(2)) and deads(s, t.z_dollar(3))
+        case Constructor.CAdd:
+            return deads(s, t.z_dollar(1)) and deads(s, t.z_dollar(2))
+        case Constructor.CSub:
+            return deads(s, t.z_dollar(1)) and deads(s, t.z_dollar(2))
+        case Constructor.CNeg:
+            return deads(s, t.z_dollar(1))
+        case Constructor.CConst:
+            return True
+     
+######################################################
+
+
 def main():
 
-    #sys.setrecursionlimit(10000)
+    sys.setrecursionlimit(10000)
 
     # i = int(sys.argv[1])
 
-    p = Let.LET(List.ASSIGN("a", Exp.ADD(Exp.VAR("b"), Exp.CONST(0)),
-            List.ASSIGN("c", Exp.CONST(2),
-            List.NESTEDLET("b", Let.LET(List.ASSIGN("c", Exp.CONST(3), List.EMPTY()),
-                                        Exp.ADD(Exp.VAR("c"), Exp.VAR("c"))),
-            List.EMPTY()))),
-          Exp.SUB(Exp.ADD(Exp.VAR("a"), Exp.CONST(7)), Exp.VAR("c")))
+    p = Let(Assign("a", Add(Var("b"), Const(0)),
+            Assign("c", Const(2),
+            NestedLet("b", Let(Assign("c", Const(3), Empty()),
+                                        Add(Var("c"), Var("c"))),
+            Empty()))),
+        Sub(Add(Var("a"), Const(7)), Var("c")))
 
     # print(optRC(zp.obj(generator(i))))
 
     print(p)
     print("\n\n")
     #print(zp.obj(p).down().down().right().node())
-    print(optRC(zp.obj(Root.ROOT(p))))
+    print(optRC(obj(Root(p))))
 
 
 if __name__ == "__main__":

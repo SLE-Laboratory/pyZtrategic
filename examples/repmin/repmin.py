@@ -1,169 +1,101 @@
-from pyztrategic import zipper as zp
-from pyztrategic import strategy as st
-from adt import adt, Case
-
-import sys
+from pyztrategic.zipper import obj
+import pyztrategic.strategy as st
 
 
-@adt
-class Tree:
-    ROOT: Case["Tree"]
-    FORK: Case["Tree", "Tree"]
-    LEAF: Case[int]
+from repmin_data import Leaf, Fork
 
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.match(
-            root=lambda l: "Root " + str(l),
-            fork=lambda l, r: "Fork " + str(l) + str(r),
-            leaf=lambda l: "Leaf " + str(l)
-        )
+type Tree = Leaf | Fork
 
 
-class Constructor:
-    CRoot = "CRoot"
-    CFork = "CFork"
-    CLeaf = "CLeaf"
+t1=Fork(Leaf(3), Fork(Leaf(2), Leaf(4)))
 
 
-def constructor(ag):
-    return ag.node().match(
-        root=lambda x: Constructor.CRoot,
-        fork=lambda x, y: Constructor.CFork,
-        leaf=lambda x: Constructor.CLeaf
-    )
+def tmin(t: Tree) -> int:
+    match(t):
+        case Leaf(n):
+            return n
+        case Fork(l,r):
+            return min(tmin(l), tmin(r))
+        
+def replace(t: Tree, n: int) -> Tree:
+    match(t):
+        case Leaf(_):
+            return Leaf(n)
+        case Fork(l,r):
+            return Fork(replace(l,n), replace(r,n))
+        
+def repmin(t: Tree) -> Tree:
+    return replace(t, tmin(t))
 
 
-def lexeme(ag):
-    return ag.node().match(
-        root=lambda x: None,
-        fork=lambda x, y: None,
-        leaf=lambda x: x
-    )
+# Properties for Repmin
 
 
-def globmin(z):
-    match constructor(z):
-        case Constructor.CRoot:
-            return locmin(z.z_dollar(1))
-        case Constructor.CLeaf:
-            return globmin(z.up())
-        case Constructor.CFork:
-            return globmin(z.up())
+def values(t: Tree) -> int:
+    match(t):
+        case Leaf(l):
+            return 1
+        case Fork(l,r):
+            return values(l) + values(r)
 
 
-def locmin(z):
-    match constructor(z):
-        case Constructor.CLeaf:
-            return lexeme(z)
-        case Constructor.CFork:
-            return min(locmin(z.z_dollar(1)), locmin(z.z_dollar(2)))
+def toList(t: Tree) -> list[int]:
+    match(t):
+        case Leaf(l):
+            return [l]
+        case Fork(l,r):
+            return toList(l) + toList(r)
 
 
-def replace(z):
-    match constructor(z):
-        case Constructor.CRoot:
-            return Tree.ROOT(replace(z.z_dollar(1)))
-        case Constructor.CLeaf:
-            return Tree.LEAF(globmin(z))
-        case Constructor.CFork:
-            return Tree.FORK(replace(z.z_dollar(1)), replace(z.z_dollar(2)))
+
+#prop_repmin1 t =  values t == values (repmin t)  
+def prop_repmin1(t: Tree) -> bool:
+    return values(t) == values(repmin(t))
 
 
-def repminAG(t):
-    return replace(zp.obj(t))
+#prop_repmin2 t = (values t) * (tmin t) == sum (toList (repmin t))
+def prop_repmin2(t: Tree) -> bool:
+    return (values(t) * tmin(t)) == sum(toList(repmin(t)))
 
 
-def repminZtrategic(t):
-    def aux(exp, z):
-        x = exp.match(
-            leaf=lambda x: Tree.LEAF(globmin(z)),
-            fork=lambda x, y: st.StrategicError,
-            root=lambda x: st.StrategicError,
-        )
-        if x is st.StrategicError:
-            raise x
-        else:
-            return x
+# Strategies
 
-    return st.full_tdTP(lambda x: st.adhocTPZ(st.idTP, aux, x), t).node()
+def inc(t: Tree) -> Tree:
+    def aux(tr: Tree) -> Tree:
+        match(tr):
+            case Leaf(l):
+                return Leaf(l+1)
+            case _:
+                raise st.StrategicError
+    return st.full_tdTP(lambda x: st.adhocTP(st.idTP, aux, x), obj(t)).node()
 
 
-def minimumValue(t):
-    def nodeVal(exp):
-        z = exp.match(
-            leaf=lambda x: [x],
-            fork=lambda x, y: st.StrategicError,
-            root=lambda x: st.StrategicError,
-        )
-        if z is st.StrategicError:
-            raise z
-        else:
-            return z
-
-    return min(st.full_tdTU(lambda x: st.adhocTU(st.failTU, nodeVal, x), t))
+# innermost
+# rule:   Fork (Leaf 0) (Leaf x)  -> Leaf x
+#         Fork (Leaf x) (Leaf 0)  -> Leaf x
 
 
-def replaceTree(i, t):
-    def replaceTP(i, exp):
-        x = exp.match(
-            leaf=lambda x: Tree.LEAF(i),
-            fork=lambda x, y: st.StrategicError,
-            root=lambda x: st.StrategicError,
-        )
-        if x is st.StrategicError:
-            raise x
-        else:
-            return x
+t2 = Fork(Fork(Leaf(2), Leaf(0)), Leaf(0))
 
-    return st.full_tdTP(lambda x: st.adhocTP(st.idTP, lambda y: replaceTP(i, y), x), t).node()
-
-
-def repmin(t):
-    return replaceTree(minimumValue(t), t)
-
-#########################################
-# generator
+def opt(t: Tree) -> Tree:
+    def aux(tr: Tree) -> Tree:
+        match(tr):
+            case Fork(Leaf(0), Leaf(x)):
+                return Leaf(x)
+            case Fork(Leaf(x), Leaf(0)):
+                return Leaf(x)
+            case _:
+                raise st.StrategicError
+    return st.innermost(lambda x: st.adhocTP(st.failTP, aux, x), obj(t)).node()
+    #return st.full_buTP(lambda x: st.adhocTP(st.idTP, aux, x), obj(t)).node()
+    #return st.full_tdTP(lambda x: st.adhocTP(st.idTP, aux, x), obj(t)).node()
 
 
-def testTree(n):
-    return Tree.ROOT(build_tree(list(range(1, n+1))))
-
-
-def build_tree(lst):
-    n = len(lst)
-    if n == 2:
-        return Tree.FORK(Tree.LEAF(lst[0]), Tree.LEAF(lst[1]))
-    elif n == 3:
-        return Tree.FORK(Tree.FORK(Tree.LEAF(lst[0]), Tree.LEAF(lst[1])), Tree.LEAF(lst[2]))
-    else:
-        half = n // 2
-        left_subtree = build_tree(lst[:half])
-        right_subtree = build_tree(lst[half:])
-        return Tree.FORK(left_subtree, right_subtree)
-
-
-#########################################
-
-def sumTree(t):
-    return t.match(
-        root=lambda r: sumTree(r),
-        fork=lambda l, r: sumTree(l) + sumTree(r),
-        leaf=lambda l: l
-    )
-
-
-##########################################
-
-
-def main():
-
-    i = int(sys.argv[1])
-
-    print(sumTree(repmin(zp.obj(testTree(i)))))
-
-
-if __name__ == "__main__":
-    main()
+def valuesTU(t: Tree) -> int:
+    def aux(tr: Tree) -> list[int]:
+        match(tr):
+            case Leaf(_):
+                return [1]
+            case _:
+                return []
+    return sum(st.full_tdTU(lambda x: st.adhocTU(st.failTU, aux, x), obj(t)))
