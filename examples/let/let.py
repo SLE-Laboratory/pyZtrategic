@@ -81,6 +81,8 @@ def dcli(x: Zipper[Lets]) -> Env:
                     return [(lexeme_Name(x.up()), lev(x.up()), lexeme_Exp(x.up()))] + dcli(x.up())
                 case Constructor.CNestedLet:
                     return [(lexeme_Name(x.up()), lev(x.up()), None)] + dcli(x.up())
+                case _:
+                    return dcli(x.up())
 
 
 def env(x: Zipper[Lets]) -> Env:

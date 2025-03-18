@@ -2,8 +2,8 @@ from hypothesis import given
 from hypothesis.strategies import integers, composite, one_of
 
 from pyztrategic import strategy as st
-from pyztrategic import zipper as zp
-from repmin_data import Root, Leaf, Fork
+from pyztrategic.zipper import Zipper, obj
+from repmin_data import Tree, Root, Leaf, Fork
 from repmin_ag import gm, lm, repminAG
 from repmin_generator import genTreeRoot
 
@@ -11,11 +11,11 @@ from repmin_generator import genTreeRoot
 
 @given(genTreeRoot())
 def testPropLocMin(i):
-    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, validateLocMin, x), zp.obj(i)))
+    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, validateLocMin, x), obj(i)))
 
 
 
-def validateLocMin(t, z):
+def validateLocMin(t: Tree, z: Zipper[Tree]) -> list[bool]:
     match(t):
         case Leaf(l):
             return [l >= gm(z)]
@@ -27,10 +27,10 @@ def validateLocMin(t, z):
 
 @given(genTreeRoot())
 def testPropGlobMin(i):
-    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, globminIsSmaller, x), zp.obj(i)))
+    assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, globminIsSmaller, x), obj(i)))
 
 
-def globminIsSmaller(t, z):
+def globminIsSmaller(t: Tree, z: Zipper[Tree]) -> list[bool]:
     match(t):
         case Leaf(l):
             return [gm(z) <= l]
@@ -43,10 +43,10 @@ def testResultingInOriginal(t):
     assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, intInOriginal, x), repminAG(t)))
 
 
-def intInOriginal(i):
-    def equal(n):
-        return i == n
-    return any(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, equal, x), zp.obj(i)))
+def intInOriginal(i: int) -> bool:
+    def equal(n: int) -> list[bool]:
+        return [i == n]
+    return any(st.full_tdTU(lambda x: st.adhocTU(st.failTU, equal, x), obj(i)))
 
 
 @given(genTreeRoot())
@@ -54,7 +54,7 @@ def testNumberLeaves(t):
     assert(countLeaves(t) == countLeaves(repminAG(t)))
 
 
-def countLeaves(t):
+def countLeaves(t: Tree) -> int:
     match(t):
         case Root(r):
             return countLeaves(r)
@@ -89,5 +89,4 @@ def countLeaves(t):
 
 @given(genTreeRoot())
 def testGlobminPreserved(t):
-    zt = zp.obj(t)
-    assert gm(zt) == gm(zp.obj(repminAG(t)))
+    assert gm(obj(t)) == gm(obj(repminAG(t)))
