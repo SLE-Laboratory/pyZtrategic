@@ -42,6 +42,9 @@ p = Let(Assign("a", Add(Var("b"), Const(0)),
              Empty()))),
          Sub(Add(Var("a"), Const(7)), Var("c")))
 
+
+# check no deads
+
 # def checkOneDead(t, z):
 #     match t:
 #         case Assign(x, _, _):
@@ -101,7 +104,7 @@ def testDeclaredNamesDcli(i):
 
 
 
-# nested 2nd dcli cont end env
+# initial list of declarations of a nestedLet is a subset of the total environment of its outer one
 
 
 def checkNested(t: Lets, z: Zipper[Lets]) -> list[bool]:
