@@ -174,8 +174,7 @@ class Zipper[T](namedtuple('Zipper', 'current, path, is_branch, get_children, ma
                     )
                 else:
                     return self._replace(current=pnode, path=ppath)
-        else:
-            return None
+        return None
 
     def top(self) -> Zipper[T]:
         Zipper = self
@@ -349,6 +348,7 @@ class Zipper[T](namedtuple('Zipper', 'current, path, is_branch, get_children, ma
                         u = u.up()
                     else:
                         return u._replace(path=())
+        return None
 
     def postorder_next(self) -> Optional[Zipper[T]]:
         """
