@@ -22,24 +22,29 @@ class Let:
     exp: Exp
 
     def __repr__(self):
-        return str(self)
-
+        return f"Let({repr(self.lst)}, {repr(self.exp)})"
+    
     def __str__(self):
-        match self:
-            case Let(lst, exp):
-                return "let " + str(lst) + "in " + str(exp) + "\n"
+        lst_str = str(self.lst).rstrip()
+        lines = lst_str.splitlines()
 
+        if lines:
+            indented = [lines[0]] + ["    " + line for line in lines[1:]]
+            formatted = "\n".join(indented)
+        else:
+            formatted = ""
+
+        return f"let {formatted}\nin {self.exp}"
+    
 @dataclass
 class Root:
     let: Let
 
     def __repr__(self):
-        return str(self)
+        return f"Root({repr(self.let)})"
 
     def __str__(self):
-        match self:
-            case Root(let):
-                return str(let)
+        return str(self.let)
 
 @dataclass
 class NestedLet:
@@ -48,13 +53,24 @@ class NestedLet:
     lst: List
 
     def __repr__(self):
-        return str(self)
+        return f"NestedLet({repr(self.name)}, {repr(self.let)}, {repr(self.lst)})"
 
     def __str__(self):
-        match self:
-            case NestedLet(name, let, lst):
-                return name + " = " + str(let) + str(lst)
+        l_str = str(self.let).rstrip()
+        lines = l_str.splitlines()
+        if lines:
+            indent = " " * (3 + len(self.name))
+            indented = [lines[0]] + [indent + line for line in lines[1:]]
+            formatted_let = "\n".join(indented)
+        else:
+            formatted_let = ""
 
+        lst_str = str(self.lst)
+        if lst_str:
+            return f"{self.name} = {formatted_let}\n{lst_str}"
+        else:
+            return f"{self.name} = {formatted_let}"
+        
 @dataclass
 class Assign:
     name: str
@@ -62,24 +78,24 @@ class Assign:
     lst: List
 
     def __repr__(self):
-        return str(self)
+        return f"Assign({repr(self.name)}, {repr(self.exp)}, {repr(self.lst)})"
 
     def __str__(self):
-        match self:
-            case Assign(name, exp, lst):
-                return name + " = " + str(exp) + "\n" + str(lst)
-
+        lst_str = str(self.lst)
+        if lst_str:
+            return f"{self.name} = {self.exp}\n{self.lst}"
+        else: 
+            return f"{self.name} = {self.exp}"
+        
 @dataclass
 class Empty:
     pass
 
     def __repr__(self):
-        return str(self)
+        return "Empty()"
 
     def __str__(self):
-        match self:
-            case Empty():
-                return ""
+        return ""
 
 @dataclass
 class Add:
@@ -87,12 +103,10 @@ class Add:
     y: Exp
 
     def __repr__(self):
-        return str(self)
+        return f"Add({repr(self.x)}, {repr(self.y)})"
 
     def __str__(self):
-        match self:
-            case Add(x, y):
-                return str(x) + " + " + str(y)
+        return f"({self.x} + {self.y})"
 
 @dataclass
 class Sub:
@@ -100,48 +114,40 @@ class Sub:
     y: Exp
 
     def __repr__(self):
-        return str(self)
+        return f"Sub({repr(self.x)}, {repr(self.y)})"
 
     def __str__(self):
-        match self:
-            case Sub(x, y):
-                return str(x) + " - " + str(y)
+        return f"({self.x} - {self.y})"
 
 @dataclass
 class Neg:
     x: Exp
 
     def __repr__(self):
-        return str(self)
+        return f"Neg({repr(self.x)})"
 
     def __str__(self):
-        match self:
-            case Neg(x):
-                return "-" + str(x)
+        return f"-{self.x}"
 
 @dataclass
 class Var:
     name: str
 
     def __repr__(self):
-        return str(self)
+        return f"Var({repr(self.name)})"
 
     def __str__(self):
-        match self:
-            case Var(name):
-                return name
+        return self.name
 
 @dataclass
 class Const:
     value: int
 
     def __repr__(self):
-        return str(self)
+        return f"Const({self.value})"
 
     def __str__(self):
-        match self:
-            case Const(value):
-                return str(value)
+        return str(self.value)
 
 
 class Constructor(StrEnum):
