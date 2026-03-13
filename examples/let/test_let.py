@@ -118,3 +118,26 @@ def checkNested(t: Lets, z: Zipper[Lets]) -> list[bool]:
 @given(genRoot())
 def testNested(i):
     assert all(st.full_tdTU(lambda x: st.adhocTUZ(st.failTU, checkNested, x), obj(i)))
+
+
+# all used names are available in the current environment
+
+def forall_nodes(prop, ast):
+    def step(z):
+        return st.adhocTUZ(st.failTU, prop, z)
+    assert all(st.full_tdTU(step, obj(ast)))
+
+
+def oneNameInEnv(t, z):
+    match t:
+        case Var(v):
+            return [varIn(v, env(z))]
+        case _:
+            return []
+
+def varIn(v, env):
+    return mBIn(v, env) == []
+
+@given(genRoot())
+def testNameInEnv(i):
+    forall_nodes(oneNameInEnv, i)
